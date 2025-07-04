@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Excel Match Tool - Farmer Data</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    h2 { color: #333; }
+    input { margin: 10px 0; }
+    button { margin-top: 10px; padding: 10px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
+    button:hover { background-color: #0056b3; }
+    #status { margin-top: 20px; }
+    .admin-section { background: #fff; padding: 10px; border: 1px solid #ccc; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h2>🧾 Excel Match Tool (FarmerNO vs Mobile Number)</h2>
+
+  <div class="admin-section">
+    <h3>🔐 Admin: Set Master Data (One Time)</h3>
+    <label><strong>Upload Master Data File:</strong></label><br>
+    <input type="file" id="masterFile" accept=".xlsx,.xls" /><br>
+    <button onclick="setMasterData()">📥 Set Master</button>
+  </div>
+
+  <label><strong>Upload Detailed Report File:</strong></label><br>
+  <input type="file" id="dailyFile" accept=".xlsx,.xls" /><br>
+  <button onclick="matchData()">🔍 Match & Download</button>
+
+  <div id="status"></div>
+
+  <script>
+    let masterNumbers = [];
+
+    function readExcel(file, callback) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        callback(json);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function setMasterData() {
+      const masterFile = document.getElementById('masterFile').files[0];
+      if (!masterFile) {
+        alert("Please upload the master file.");
+        return;
+      }
+
+      readExcel(masterFile, (masterData) => {
+        const numbers = masterData.map(row => String(row['Mobile_Number']).trim());
+        localStorage.setItem('masterNumbers', JSON.stringify(numbers));
+        alert("✅ Master Data Saved Successfully!");
+      });
+    }
+
+    function matchData() {
+      const dailyFile = document.getElementById('dailyFile').files[0];
+      const status = document.getElementById('status');
+
+      if (!dailyFile) {
+        alert("Please upload the daily report file.");
+        return;
+      }
+
+      const stored = localStorage.getItem('masterNumbers');
+      if (!stored) {
+        alert("❌ Master data not set. Please set it first.");
+        return;
+      }
+
+      masterNumbers = JSON.parse(stored);
+
+      readExcel(dailyFile, (dailyData) => {
+        const matched = dailyData.filter(row => masterNumbers.includes(String(row['FarmerNO']).trim()));
+        status.innerHTML = `<p><strong>✅ Matched Records:</strong> ${matched.length}</p>`;
+
+        const ws = XLSX.utils.json_to_sheet(matched);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Matched Results");
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        saveAs(new Blob([wbout], { type: "application/octet-stream" }), "Matched_Results.xlsx");
+      });
+    }
+  </script>
+</body>
+</html>
